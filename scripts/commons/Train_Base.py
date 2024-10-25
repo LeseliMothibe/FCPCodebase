@@ -126,8 +126,10 @@ class Train_Base():
         verbose : int
             0 - no output (except if enable_FPS_control=True)
             1 - print episode statistics
+
         '''
 
+        print("TRAIN BASE: TEST MODEL!!!")
         if model_path is not None:
             assert os.path.isdir(model_path), f"{model_path} is not a valid path"
             self.display_evaluations(model_path)
@@ -164,7 +166,16 @@ class Train_Base():
         obs = env.reset()
         while True:
             action, _states = model.predict(obs, deterministic=True)
+            print("******************************************************* \n"
+                  "* * * * * * * * * * * * * * * * * * * * * * * * * * * * \n"
+                  "* * * * * * * * * * * * * * * * * * * * * * * * * * * * \n"
+                  "           S    E    N   A    T    E                    \n"
+                  "* * * * * * * * * * * * * * * * * * * * * * * * * * * * \n"
+                  "* * * * * * * * * * * * * * * * * * * * * * * * * * * * \n"
+                  "******************************************************* \n"
+                 )
             obs, reward, done, info = env.step(action)
+            speed = env.getSpeed(action)
             ep_reward += reward
             ep_length += 1
 

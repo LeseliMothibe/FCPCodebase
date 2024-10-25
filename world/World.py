@@ -100,6 +100,13 @@ class World():
         self.logger = logger
         self.robot = Robot(unum, robot_type)
 
+        #Senate
+        self.rspeed = 0
+
+    #Senate
+    def getSpeed(self, action):
+        return self.rspeed
+
 
     def log(self, msg:str):
         '''

@@ -9,8 +9,6 @@ from time import sleep
 import os, gym
 import numpy as np
 
-import time
-
 '''
 Objective:
 Learn how to run forward using step primitive
@@ -148,8 +146,6 @@ class Basic_Run(gym.Env):
         # exponential moving average
         self.act = 0.4 * self.act + 0.6 * action
 
-        time.perf_counter()
-
         # execute Step behavior to extract the target positions of each leg (we will override these targets)
         if self.step_counter == 0:
             '''
@@ -183,33 +179,18 @@ class Basic_Run(gym.Env):
             harmonize=False     # there is no point in harmonizing actions if the targets change at every step  
         )
 
-        dur = time.perf_counter()
-
         self.sync() # run simulation step
         self.step_counter += 1
          
         reward = r.cheat_abs_pos[0] - self.lastx
         self.lastx = r.cheat_abs_pos[0]
 
-        #########################LESELI'S REWARDS##################
-
-        #speed reward
-        dist = np.sqrt((-14 - r.cheat_abs_pos[0])**2)
-
-        speed = dist/dur
-
-        #reward += (1/600) * speed
-
-        self.player.world.rspeed = speed
-
-        ###########################################################
-
         # terminal state: the robot is falling or timeout
         terminal = r.cheat_abs_pos[2] < 0.3 or self.step_counter > 300
 
         return self.observe(), reward, terminal, {}
 
-        return 10
+
 
 
 
