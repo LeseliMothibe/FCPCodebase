@@ -26,6 +26,7 @@ class Base_Agent():
         self.behavior.create_behaviors()
         Base_Agent.all_agents.append(self)
 
+
     @abstractmethod
     def think_and_send(self):
         pass

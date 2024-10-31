@@ -278,13 +278,15 @@ class Train_Base():
         # Create custom callback to display evaluations
         custom_callback = None if not evaluate else Cyclic_Callback(eval_freq, lambda:self.display_evaluations(path,True))
 
+        speed_custom_callback = None if not evaluate else speedCallback(lambda:self.display_evaluations(path,True))
+
         # Create checkpoint callback
         checkpoint_callback = None if save_freq is None else CheckpointCallback(save_freq=save_freq, save_path=path, name_prefix="model", verbose=1)
 
         # Create custom callback to export checkpoint models
         export_callback = None if save_freq is None or export_name is None else Export_Callback(save_freq, path, export_name)
 
-        callbacks = CallbackList([c for c in [eval_callback, custom_callback, checkpoint_callback, export_callback] if c is not None])
+        callbacks = CallbackList([c for c in [eval_callback, custom_callback, checkpoint_callback, export_callback, speed_custom_callback] if c is not None])
 
         model.learn( total_timesteps=total_steps, callback=callbacks )
         model.save( os.path.join(path, "last_model") )
@@ -489,6 +491,23 @@ class Cyclic_Callback(BaseCallback):
         if self.n_calls % self.freq == 0:
             self.function()
         return True # If the callback returns False, training is aborted early
+    
+
+class speedCallback(BaseCallback):
+    """
+    Custom callback for plotting additional values in tensorboard.
+    """
+
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
+        file = ""
+
+    def _on_step(self) -> bool:
+        # Log scalar value (here a random variable)
+        value = np.random.random()
+        self.logger.record("random_value", value)
+        #print("SPEED CALLED:", value)
+        return True
 
 class Export_Callback(BaseCallback):
     ''' Stable baselines custom callback '''

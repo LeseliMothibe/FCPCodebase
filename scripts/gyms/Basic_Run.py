@@ -10,6 +10,7 @@ import os, gym
 import numpy as np
 
 import time
+import matplotlib.pyplot as plt
 
 '''
 Objective:
@@ -18,6 +19,7 @@ Learn how to run forward using step primitive
 - class Basic_Run: implements an OpenAI custom gym
 - class Train:  implements algorithms to train a new model or test an existing model
 '''
+speeds = []
 
 class Basic_Run(gym.Env):
     def __init__(self, ip, server_p, monitor_p, r_type, enable_draw) -> None:
@@ -47,6 +49,8 @@ class Basic_Run(gym.Env):
 
         # Place ball far away to keep landmarks in FoV (head follows ball while using Step behavior)
         self.player.scom.unofficial_move_ball((14, 0, 0.042))
+
+        self.speeds = []
         
 
     def observe(self, init=False):
@@ -187,30 +191,58 @@ class Basic_Run(gym.Env):
 
         self.sync() # run simulation step
         self.step_counter += 1
+
+
+        #exisisting reward
          
         reward = r.cheat_abs_pos[0] - self.lastx
-        self.lastx = r.cheat_abs_pos[0]
 
         #########################LESELI'S REWARDS##################
 
-        #speed reward
+        #_________________________forward speed reward_______________________
         dist = np.sqrt((-14 - r.cheat_abs_pos[0])**2)
 
         speed = dist/dur
 
-        #reward += (1/600) * speed
+        global speeds
+        self.speeds.append(speed)
 
-        self.player.world.rspeed = speed
+        reward += 0.002 * speed
+
+        #_________________________tourque reward_______________________
+
+        joint_speeds = np.abs(r.joints_speed[2:22])
+
+        reward -= 0.0004 * np.sum(joint_speeds)
+
+        #___________________________tilt reward________________________
+
+
+        torso_pitch = abs(r.imu_torso_pitch)
+        torso_roll = abs(r.imu_torso_roll)
+
+        reward -= 0.004*(torso_pitch*torso_roll) 
+
+        #_______________________foot contact reward____________________
+        
+        left_foot_contact = np.any(r.frp.get('lf', (0, 0, 0, 0, 0, 0)))
+
+        right_foot_contact = np.any(r.frp.get('rf', (0, 0, 0, 0, 0, 0)))
+
+        if left_foot_contact or right_foot_contact:
+            reward += 0.001
 
         ###########################################################
+
+        self.lastx = r.cheat_abs_pos[0]
 
         # terminal state: the robot is falling or timeout
         terminal = r.cheat_abs_pos[2] < 0.3 or self.step_counter > 300
 
         return self.observe(), reward, terminal, {}
 
-        return 10
-
+    def get_speeds(self):
+        return self.speeds
 
 
 class Train(Train_Base):
@@ -224,7 +256,8 @@ class Train(Train_Base):
         n_envs = min(16, os.cpu_count())
         n_steps_per_env = 1024  # RolloutBuffer is of size (n_steps_per_env * n_envs)
         minibatch_size = 64    # should be a factor of (n_steps_per_env * n_envs)
-        total_steps = 30000000
+        #total_steps = 30000000
+        total_steps = 7000000
         learning_rate = 3e-4
         folder_name = f'Basic_Run_R{self.robot_type}'
         model_path = f'./scripts/gyms/logs/{folder_name}/'
@@ -234,6 +267,7 @@ class Train(Train_Base):
         #--------------------------------------- Run algorithm
         def init_env(i_env):
             def thunk():
+
                 return Basic_Run( self.ip , self.server_p + i_env, self.monitor_p_1000 + i_env, self.robot_type, False )
             return thunk
 
@@ -254,10 +288,28 @@ class Train(Train_Base):
             print("\nctrl+c pressed, aborting...\n")
             servers.kill()
             return
-    
+        
+        self.plot_speeds(self)
+
         env.close()
         eval_env.close()
         servers.kill()
+
+    def plot_speed(self):
+
+
+        #speeds = get_speeds()
+
+        plt.plot(speeds)
+        plt.autoscale()
+        plt.xlabel("Time Steps")
+        plt.ylabel("Speed m/s")
+        plt.title ("Robot Speed Over Time")
+        plt.savefig("speed.png")
+
+        #plt.show()
+
+        
         
 
     def test(self, args):
