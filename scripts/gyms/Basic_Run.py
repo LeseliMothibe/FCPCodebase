@@ -221,7 +221,7 @@ class Basic_Run(gym.Env):
         torso_pitch = abs(r.imu_torso_pitch)
         torso_roll = abs(r.imu_torso_roll)
 
-        reward -= 0.004*(torso_pitch*torso_roll) 
+        reward -= 0.0004*(torso_pitch*torso_roll) 
 
         #_______________________foot contact reward____________________
         
@@ -231,6 +231,11 @@ class Basic_Run(gym.Env):
 
         if left_foot_contact or right_foot_contact:
             reward += 0.001
+
+        #______________________cummulative distance_____________________
+
+        if self.step_counter > 300 or r.cheat_abs_pos[2 < 0.3]:
+            reward += 0.001 * dist
 
         ###########################################################
 
@@ -243,6 +248,21 @@ class Basic_Run(gym.Env):
 
     def get_speeds(self):
         return self.speeds
+    
+    def plot_speed():
+
+
+        #speeds = get_speeds()
+
+        plt.plot(speeds)
+        plt.autoscale()
+        plt.xlabel("Time Steps")
+        plt.ylabel("Speed m/s")
+        plt.title ("Robot Speed Over Time")
+        plt.savefig("speed.png")
+
+        #plt.show()
+
 
 
 class Train(Train_Base):
@@ -255,9 +275,9 @@ class Train(Train_Base):
         #--------------------------------------- Learning parameters
         n_envs = min(16, os.cpu_count())
         n_steps_per_env = 1024  # RolloutBuffer is of size (n_steps_per_env * n_envs)
-        minibatch_size = 64    # should be a factor of (n_steps_per_env * n_envs)
+        minibatch_size = 64     # should be a factor of (n_steps_per_env * n_envs)
         #total_steps = 30000000
-        total_steps = 7000000
+        total_steps = 100000
         learning_rate = 3e-4
         folder_name = f'Basic_Run_R{self.robot_type}'
         model_path = f'./scripts/gyms/logs/{folder_name}/'
@@ -289,26 +309,11 @@ class Train(Train_Base):
             servers.kill()
             return
         
-        self.plot_speeds(self)
+        Basic_Run.plot_speed()
 
         env.close()
         eval_env.close()
         servers.kill()
-
-    def plot_speed(self):
-
-
-        #speeds = get_speeds()
-
-        plt.plot(speeds)
-        plt.autoscale()
-        plt.xlabel("Time Steps")
-        plt.ylabel("Speed m/s")
-        plt.title ("Robot Speed Over Time")
-        plt.savefig("speed.png")
-
-        #plt.show()
-
         
         
 
