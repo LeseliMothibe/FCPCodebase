@@ -19,7 +19,6 @@ Learn how to run forward using step primitive
 - class Basic_Run: implements an OpenAI custom gym
 - class Train:  implements algorithms to train a new model or test an existing model
 '''
-speeds = []
 
 class Basic_Run(gym.Env):
     def __init__(self, ip, server_p, monitor_p, r_type, enable_draw) -> None:
@@ -51,6 +50,8 @@ class Basic_Run(gym.Env):
         self.player.scom.unofficial_move_ball((14, 0, 0.042))
 
         self.speeds = []
+        self.speed_sum = 0
+        self.avg_speed = 0
         
 
     def observe(self, init=False):
@@ -116,6 +117,8 @@ class Basic_Run(gym.Env):
 
         self.step_counter = 0
         r = self.player.world.robot
+        self.speeds = []
+        self.speed_sum = 0
         
         for _ in range(25): 
             self.player.scom.unofficial_beam((-14,0,0.50),0) # beam player continuously (floating above ground)
@@ -200,19 +203,17 @@ class Basic_Run(gym.Env):
         #########################LESELI'S REWARDS##################
 
         #_________________________forward speed reward_______________________
+        
         dist = np.sqrt((-14 - r.cheat_abs_pos[0])**2)
 
         speed = dist/dur
 
-        global speeds
-        self.speeds.append(speed)
-
+        self.speed_sum += speed
         reward += 0.002 * speed
 
         #_________________________tourque reward_______________________
 
         joint_speeds = np.abs(r.joints_speed[2:22])
-
         reward -= 0.0004 * np.sum(joint_speeds)
 
         #___________________________tilt reward________________________
@@ -230,12 +231,16 @@ class Basic_Run(gym.Env):
         right_foot_contact = np.any(r.frp.get('rf', (0, 0, 0, 0, 0, 0)))
 
         if left_foot_contact or right_foot_contact:
-            reward += 0.001
+            reward += 0.002
 
         #______________________cummulative distance_____________________
 
-        if self.step_counter > 300 or r.cheat_abs_pos[2 < 0.3]:
-            reward += 0.001 * dist
+        if self.step_counter > 300 or r.cheat_abs_pos[2] < 0.3:
+            reward += 0.003 * dist
+
+            self.avg_speed = self.speed_sum/self.step_counter
+            self.speeds.append(self.avg_speed)
+            self.plot_speed()
 
         ###########################################################
 
@@ -245,23 +250,15 @@ class Basic_Run(gym.Env):
         terminal = r.cheat_abs_pos[2] < 0.3 or self.step_counter > 300
 
         return self.observe(), reward, terminal, {}
-
-    def get_speeds(self):
-        return self.speeds
     
-    def plot_speed():
+    def plot_speed(self):
 
-
-        #speeds = get_speeds()
-
-        plt.plot(speeds)
+        plt.plot(self.speeds)
         plt.autoscale()
         plt.xlabel("Time Steps")
         plt.ylabel("Speed m/s")
         plt.title ("Robot Speed Over Time")
         plt.savefig("speed.png")
-
-        #plt.show()
 
 
 
@@ -309,7 +306,7 @@ class Train(Train_Base):
             servers.kill()
             return
         
-        Basic_Run.plot_speed()
+        #Basic_Run.plot_speed()
 
         env.close()
         eval_env.close()
