@@ -1,3 +1,4 @@
+
 from agent.Base_Agent import Base_Agent as Agent
 from behaviors.custom.Step.Step import Step
 from world.commons.Draw import Draw
@@ -65,7 +66,11 @@ class Basic_Run(gym.Env):
         self.falls_csv = 'falls.csv'
         self.stopping_time_csv = 'stopping_time.csv'
         self.stopping_dist_csv = 'stopping_dist.csv'
-        self.stopping_deviation = 'stopping_deviation.csv'
+        self.stopping_deviation_csv = 'stopping_deviation.csv'
+
+        #stopping variables:
+        self.stopping_start_pos = 0.0
+        self.current_orientation = 0.0
 
         
         #speed
@@ -89,7 +94,7 @@ class Basic_Run(gym.Env):
             writer.writerow(['Episode', 'Stopping Distance'])
 
         #stopping deviation
-        with open(self.stopping_deviation, mode = 'w', newline='') as file:
+        with open(self.stopping_deviation_csv, mode = 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['Episode', 'Stopping Deviation'])
 
@@ -210,59 +215,12 @@ class Basic_Run(gym.Env):
         #_________________________get starting time and point for each thread________________________
         if self.env_id == 0:
             startTime0 = time.perf_counter()
-            startPos0 = r.cheat_abs_pos[0]
 
-        """
-        if self.env_id == 1:
-            startTime1 = time.perf_counter()
-            startPos1 = r.cheat_abs_pos[0]
+            if self.step_counter == 0:
+                self.log_to_csv(self.speeds_csv, "STOP", "STOP")
 
-        if self.env_id == 2:
-            startTime2 = time.perf_counter()
-            startPos2 = r.cheat_abs_pos[0]
 
-        if self.env_id == 3:
-            startTime3 = time.perf_counter()
-            startPos3 = r.cheat_abs_pos[0]
-
-        if self.env_id == 4:
-            startTime4 = time.perf_counter()
-            startPos4 = r.cheat_abs_pos[0]
-
-        if self.env_id == 5:
-            startTime5 = time.perf_counter()
-            startPos5 = r.cheat_abs_pos[0]
-
-        if self.env_id == 6:
-            startTime6 = time.perf_counter()
-            startPos6 = r.cheat_abs_pos[0]
-
-        if self.env_id == 7:
-            startTime7 = time.perf_counter()
-            startPos7 = r.cheat_abs_pos[0]
-
-        if self.env_id == 8:
-            startTime8 = time.perf_counter()
-            startPos8 = r.cheat_abs_pos[0]
-
-        if self.env_id == 9:
-            startTime9 = time.perf_counter()
-            startPos9 = r.cheat_abs_pos[0]
-
-        if self.env_id == 10:
-            startTime10 = time.perf_counter()
-            startPos10 = r.cheat_abs_pos[0]
-
-        if self.env_id == 11:
-            startTime11 = time.perf_counter()
-            startPos11 = r.cheat_abs_pos[0]
-
-        if self.env_id == 12:
-            startTime12 = time.perf_counter()
-            startPos12 = r.cheat_abs_pos[0]
-
-        """
-
+       
         # execute Step behavior to extract the target positions of each leg (we will override these targets)
         if self.step_counter == 0:
             '''
@@ -298,243 +256,95 @@ class Basic_Run(gym.Env):
 
         self.sync() # run simulation step
 
-        #__________________________Calculate step duration for each thread_____________________
 
 
         if self.env_id == 0:
             stopTime0 = time.perf_counter()
-            dur0 = stopTime0 - startTime0
-
-        """""
-
-        if self.env_id == 1:
-            stopTime1 = time.perf_counter()
-            dur1 = stopTime1 - startTime1
-
-        if self.env_id == 2:
-            stopTime2 = time.perf_counter()
-            dur2 = stopTime2 - startTime2
-
-        if self.env_id == 3:
-            stopTime3 = time.perf_counter()
-            dur3 = stopTime3 - startTime3
-
-        if self.env_id == 4:
-            stopTime4 = time.perf_counter()
-            dur4 = stopTime4 - startTime4
-
-        if self.env_id == 5:
-            stopTime5 = time.perf_counter()
-            dur5 = stopTime5 - startTime5
-
-        if self.env_id == 6:
-            stopTime6 = time.perf_counter()
-            dur6 = stopTime6 - startTime6
-
-        if self.env_id == 7:
-            stopTime7 = time.perf_counter()
-            dur7 = stopTime7 - startTime7
-
-        if self.env_id == 8:
-            stopTime8 = time.perf_counter()
-            dur8 = stopTime8 - startTime8
-
-        if self.env_id == 9:
-            stopTime9 = time.perf_counter()
-            dur9 = stopTime9 - startTime9
-
-        if self.env_id == 10:
-            stopTime10 = time.perf_counter()
-            dur10 = stopTime10 - startTime10
-
-        if self.env_id == 11:
-            stopTime11 = time.perf_counter()
-            dur11 = stopTime11 - startTime11
-
-        if self.env_id == 12:
-            stopTime12 = time.perf_counter()
-            dur12 = stopTime12 - startTime12
-
-        """
 
         self.step_counter += 1
 
         #exisisting reward
-        reward = r.cheat_abs_pos[0] - self.lastx
+        reward = 2* (r.cheat_abs_pos[0] - self.lastx)
 
         #########################LESELI'S REWARDS##################
 
-        #_________________________forward speed reward_______________________
+        ##############################################################################
+        ############################### R U N N I N G ################################
+        ##############################################################################
+
+        if self.step_counter < 300:
+           
+
+            torso_velocity = 0.05*((r.cheat_abs_pos[0] - self.lastx) / r.STEPTIME )#speed reward
+            #joint_speed_penalty = 0.001 * np.sum(np.abs(r.joints_speed[2:22]))  # Joint speed penalty
+            #torso_penalty = 0.005 * (abs(r.imu_torso_roll) + abs(r.imu_torso_pitch))  # Stability penalty
+            self.deviation_from_heading = 0.005 * abs(self.current_orientation)  # Deviation from straight (heading = 0) 
 
 
-        #_________________________calculate speed for each thread_______________________
-
-        """"
-
-        dist = np.sqrt((startPos0 - r.cheat_abs_pos[0]) ** 2)
-        speed = dist / dur0
-        self.speed_sum += speed
-        #reward += 0.002 * speed
-        if r.cheat_abs_pos[2] < 0.3:
-            self.fall_count = self.fall_count + 1
-
-            # Update speed list and plot
-        if self.step_counter > 300 or r.cheat_abs_pos[2] < 0.3:
-            #self.speed_sum = self.speed_sum /13
-            self.avg_speed = self.speed_sum / self.step_counter
-            self.speeds.append(self.avg_speed)
-            self.falls.append(self.fall_count)S
-            #self.plot_speed()
-            #self.plot_falls()
-
-        """""
-        if self.env_id == 0:
-            dist = np.sqrt((startPos0 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur0
-            self.speed_sum += speed
-            #reward += 0.002 * speed
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-            # Update speed list and plot
-            if self.step_counter > 300 or r.cheat_abs_pos[2] < 0.3:
-                #self.speed_sum = self.speed_sum /13
-                self.avg_speed = self.speed_sum / self.step_counter
-                self.speeds.append(self.avg_speed)
-                #self.falls.append(self.fall_count)
-                #self.plot_speed()
-                #self.plot_falls()
-                self.log_to_csv(self.speeds_csv, self.episode_number, self.avg_speed)
-                self.log_to_csv(self.falls_csv, self.episode_number, self.fall_count)
-
-        """
-        if self.env_id == 1:
-            dist = np.sqrt((startPos1 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur1
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-        
-        if self.env_id == 2:
-            dist = np.sqrt((startPos2 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur2
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 3:
-            dist = np.sqrt((startPos3 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur3
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 4:
-            dist = np.sqrt((startPos4 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur4
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 5:
-            dist = np.sqrt((startPos5 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur5
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 6:
-            dist = np.sqrt((startPos6 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur6
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 7:
-            dist = np.sqrt((startPos7 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur7
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 8:
-            dist = np.sqrt((startPos8 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur8
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 9:
-            dist = np.sqrt((startPos9 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur9
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 10:
-            dist = np.sqrt((startPos10 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur10
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 11:
-            dist = np.sqrt((startPos11 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur11
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-
-        if self.env_id == 12:
-            dist = np.sqrt((startPos12 - r.cheat_abs_pos[0]) ** 2)
-            speed = dist / dur12
-            self.speed_sum += speed
-
-            if r.cheat_abs_pos[2] < 0.3:
-                self.fall_count = self.fall_count + 1
-        #_________________________tourque reward_______________________
-
-        joint_speeds = np.abs(r.joints_speed[2:22])
-        #reward -= 0.0004 * np.sum(joint_speeds)
-
-        """
-
-        #___________________________tilt reward________________________
-
-
-        torso_pitch = abs(r.imu_torso_pitch)
-        torso_roll = abs(r.imu_torso_roll)
-
-        #reward -= 0.0004*(torso_pitch*torso_roll) 
-
-        #_______________________foot contact reward____________________
-        
-        left_foot_contact = np.any(r.frp.get('lf', (0, 0, 0, 0, 0, 0)))
-
-        right_foot_contact = np.any(r.frp.get('rf', (0, 0, 0, 0, 0, 0)))
-
-        if left_foot_contact or right_foot_contact:
-            #reward += 0.002
-            x = 0
-
-        #______________________cummulative distance_____________________
-
-        if self.step_counter > 300 or r.cheat_abs_pos[2] < 0.3:
-            #reward += 0.01 * dist
-
-            x = 0
+            lf_fz = r.frp.get('lf', (0,0,0,0,0,0))[5]
+            rf_fz = r.frp.get('rf', (0,0,0,0,0,0))[5]
+            foot_contact_bonus = 0.1 * (lf_fz + rf_fz) / 200
             
+            reward += torso_velocity -self.deviation_from_heading
+
+            if self.env_id == 0:
+                self.speed_sum += torso_velocity
+
+                if r.cheat_abs_pos[2] < 0.3:
+                    self.fall_count = self.fall_count + 1
+
+                # Update speed list and plot
+                if self.step_counter == 299 or r.cheat_abs_pos[2] < 0.3:
+                    self.avg_speed = self.speed_sum / self.step_counter
+                    self.speeds.append(self.avg_speed)
+                    self.log_to_csv(self.speeds_csv, self.episode_number, self.avg_speed)
+                    self.log_to_csv(self.falls_csv, self.episode_number, self.fall_count)
+    
+
+        ##############################################################################
+        ############################## S T O P P I N G ###############################
+        ##############################################################################
+
+
+        if self.step_counter == 300:
+            if self.env_id == 0:
+                self.stopping_start_pos = r.cheat_abs_pos[0]
+                self.current_orientation = r.imu_torso_orientation
+                self.log_to_csv(self.speeds_csv, "STOP", "STOP")
+
+
+        if self.step_counter > 300:
+
+            torso_velocity = 0.03*((r.cheat_abs_pos[0] - self.lastx) / r.STEPTIME )#speed reward
+            forward_penalty = abs(r.cheat_abs_pos[0] - self.lastx)  # strong penalty for moving forward
+            joint_speed_penalty = 0.001 * np.sum(np.abs(r.joints_speed[2:22]))  # Joint speed penalty
+            torso_penalty = 0.005 * (abs(r.imu_torso_roll) + abs(r.imu_torso_pitch))  # Stability penalty
+            self.deviation_from_heading = 0.005 * abs(self.current_orientation)  # Deviation from straight (heading = 0) 
+
+
+            lf_fz = r.frp.get('lf', (0,0,0,0,0,0))[5]
+            rf_fz = r.frp.get('rf', (0,0,0,0,0,0))[5]
+            foot_contact_bonus = 0.1 * (lf_fz + rf_fz) / 200
+            
+            reward = -self.deviation_from_heading - forward_penalty - torso_penalty - joint_speed_penalty + foot_contact_bonus  
+
+
+            if self.env_id == 0:
+
+                self.speed_sum += torso_velocity
+                step_number = self.step_counter - 300
+                self.avg_speed = self.speed_sum / step_number
+                self.speeds.append(self.avg_speed)
+                self.log_to_csv(self.speeds_csv, self.episode_number, self.avg_speed)
+            
+            
+        if self.step_counter == 599 or r.cheat_abs_pos[2] < 0.3:
+            if self.env_id == 0:
+                stopping_time = time.perf_counter() - startTime0
+                stopping_dist = np.abs(r.cheat_abs_pos[0] - self.stopping_start_pos)
+                self.log_to_csv(self.stopping_time_csv, self.episode_number, stopping_time)
+                self.log_to_csv(self.stopping_dist_csv, self.episode_number, stopping_dist)
+                self.log_to_csv(self.stopping_deviation_csv, self.episode_number, self.deviation_from_heading)
 
         ###########################################################
 
@@ -542,53 +352,10 @@ class Basic_Run(gym.Env):
 
         # terminal state: the robot is falling or timeout
         #end of the episode
-        terminal = r.cheat_abs_pos[2] < 0.3 or self.step_counter > 300
+        terminal = r.cheat_abs_pos[2] < 0.3 or self.step_counter > 600
 
 
         return self.observe(), reward, terminal, {}
-    
-    def plot_speed(self):
-
-        plt.figure()
-        plt.plot(self.speeds)
-        plt.draw()
-        plt.autoscale()
-        plt.xlabel("Time Steps")
-        plt.ylabel("Speed m/s")
-        plt.title ("Robot Speed Over Time")
-        plt.savefig("speed.png")
-
-    def plot_falls(self):
-
-        plt.figure()
-        
-        fig, ax = plt.subplots(figsize=(10, 2))
-
-        # Plotting binary time-series
-        for i, fall in enumerate(self.falls):
-            color = 'red' if fall == 1 else 'green'
-            ax.axvspan(i, i+1, color=color, edgecolor='black')
-
-        # Aesthetic adjustments
-        ax.set_xlim(0, len(self.falls))
-        ax.set_yticks([])  # Remove y-axis ticks
-        ax.set_xticks(range(0, len(self.falls), 10))  # Adjust xticks spacing
-        ax.set_xlabel('Time')
-        ax.set_title('Binary Time-Series of Robot Falls')
-        plt.tight_layout()
-        plt.savefig("falls.png")
-        plt.close()
-
-        """""
-        plt.plot(self.falls)
-        plt.draw()
-        plt.autoscale()
-        plt.xlabel("Time Steps")
-        plt.ylabel("Number of times fallen")
-        plt.title ("The number of times that the agent fell during training")
-        plt.savefig("falls.png")
-        """
-
 
 class Train(Train_Base):
     def __init__(self, script) -> None:
@@ -603,9 +370,9 @@ class Train(Train_Base):
         n_envs = min(16, os.cpu_count())
         n_steps_per_env = 1024  # RolloutBuffer is of size (n_steps_per_env * n_envs)
         minibatch_size = 64     # should be a factor of (n_steps_per_env * n_envs)
-        #total_steps = 30000000
+        total_steps = 30000000
         #total_steps = 2000000 #one hour run = 2000000
-        total_steps = 50000
+        #total_steps = 20000000
         learning_rate = 3e-4
         folder_name = f'Basic_Run_R{self.robot_type}'
         model_path = f'./scripts/gyms/logs/{folder_name}/'
@@ -655,7 +422,7 @@ class Train(Train_Base):
 
         # Uses different server and monitor ports
         server = Server( self.server_p-1, self.monitor_p, 1 )
-        env = Basic_Run( self.ip, self.server_p-1, self.monitor_p, self.robot_type, True )
+        env = Basic_Run( self.ip, self.server_p-1, self.monitor_p, self.robot_type, True, 0 )
         model = PPO.load( args["model_file"], env=env )
 
         try:
