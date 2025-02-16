@@ -52,13 +52,13 @@ class Basic_Run(gym.Env):
         # Place ball far away to keep landmarks in FoV (head follows ball while using Step behavior)
         self.player.scom.unofficial_move_ball((14, 0, 0.042))
 
-        self.speeds_csv = 'og_average_speeds.csv'
-        self.falls_csv_running = 'og_falls_running.csv'
+        self.speeds_csv = 'rmppo_average_speeds.csv'
+        self.falls_csv_running = 'rmppo_falls_running.csv'
         self.falls_csv_stopping = 'falls_stopping.csv'
-        self.stopping_time_csv = 'stopping_time.csv'
+        self.stopping_time_csv = 'stopping_time_OG.csv'
         self.stopping_dist_csv = 'stopping_dist.csv'
         self.stopping_deviation_csv = 'stopping_deviation.csv'
-        self.running_deviation_csv = 'og_running_deviation.csv'
+        self.running_deviation_csv = 'rmppo_running_deviation.csv'
         self.cumulative_fall_csv = 'cumulative_fall.csv'
 
         self.speeds = []
@@ -240,25 +240,73 @@ class Basic_Run(gym.Env):
         self.sync() # run simulation step
         self.step_counter += 1
          
-        reward = r.cheat_abs_pos[0] - self.lastx
+        base_reward =  3 * (r.cheat_abs_pos[0] - self.lastx)
+
+        ##############################################################################
+        ################################  MY REWARDS  ################################
+        ##############################################################################
+        speed = abs(r.cheat_abs_pos[0] - self.lastx)
+        if self.env_id == 0:
+
+            #if self.step_counter % 10 == 0:
+
+            self.speed_sum += speed
+
+            self.current_orientation_devaition = abs(self.start_orientation - self.obs[3])
+            self.deviation_sum += self.current_orientation_devaition
+
+            if r.cheat_abs_pos[2] < 0.3:
+                self.fall_count = self.fall_count + 1
+                self.cumulative_fall += 1
+
+        # Stability bonuses
+        torso_stability = 1.0 / (1.0 + abs(r.imu_torso_pitch) + abs(r.imu_torso_roll))
+        foot_contact = np.sum(r.frp.get('lf', (0,0,0,0,0,0))[3:6]) + np.sum(r.frp.get('rf', (0,0,0,0,0,0))[3:6])
+        smooth_movement = 1.0 / (1.0 + np.sum(np.abs(r.joints_speed[2:22])))
+        
+        # Composite reward calculation
+        reward = (
+            base_reward   # Primary forward motion incentive
+            + 0.002 * torso_stability   # Bonus for upright posture
+            #+ 0.1 * foot_contact   # Bonus for maintaining foot contact makes it spin
+            + 0.05 * smooth_movement   # Bonus for smooth joint movements
+            + 0.01   # Small survival bonus per step 
+            - 0.15 * self.current_orientation_devaition
+        )
+
+        # Speed achievement bonuses
+        if speed > 0.3:  # Bronze speed tier
+            reward += 0.05
+        if speed > 0.5:  # Silver speed tier
+            reward += 0.1
+        if speed > 0.7:  # Gold speed tier
+            reward += 0.2
+
+        # ---------------------------------------------------------------
+        # Add to reward calculation:
+        target_height = 0.5  # Adjust based on your robot's ideal height
+        height_bonus = 1.0 / (1.0 + abs(r.loc_head_z - target_height))
+        reward += 0.1 * height_bonus
+
+        # Add to reward calculation:
+        if self.step_counter % 50 == 0:  # Every 50 steps
+            reward += 0.5  # Milestone bonus
+
+        if r.cheat_abs_pos[2] <0.3:
+            reward -= 0.08
+
+        ##############################################################################
+        ##############################################################################
+        ##############################################################################
+
         self.lastx = r.cheat_abs_pos[0]
 
-        #METRICS
+        ##############################################################################
+        ################################  MY METRICS  ################################
+        ##############################################################################
         
         if self.env_id == 0:
                 
-                speed = abs(r.cheat_abs_pos[0] - self.start_pos)
-                self.speed_sum += speed
-                
-                self.current_orientation_devaition = abs(self.start_orientation - self.obs[3])
-                self.deviation_from_heading = 0.005 * abs(self.current_orientation_devaition)
-                
-                self.deviation_sum += self.current_orientation_devaition
-
-                if r.cheat_abs_pos[2] < 0.3:
-                    self.fall_count = self.fall_count + 1
-                    self.cumulative_fall += 1
-
                 # Update speed list and plot
                 if self.step_counter == 299 or r.cheat_abs_pos[2] < 0.3:
                     self.avg_speed = self.speed_sum / self.step_counter
@@ -268,16 +316,16 @@ class Basic_Run(gym.Env):
                     self.log_to_csv(self.falls_csv_running, self.episode_number, self.fall_count)
                     self.log_to_csv(self.running_deviation_csv, self.episode_number, avg_deviation)
                     self.log_to_csv(self.cumulative_fall_csv, self.episode_number, self.cumulative_fall)
+
+        ##############################################################################
+        ##############################################################################
+        ##############################################################################
             
 
         # terminal state: the robot is falling or timeout
         terminal = r.cheat_abs_pos[2] < 0.3 or self.step_counter > 300
 
         return self.observe(), reward, terminal, {}
-
-
-
-
 
 class Train(Train_Base):
     def __init__(self, script) -> None:
@@ -291,7 +339,7 @@ class Train(Train_Base):
         n_steps_per_env = 1024  # RolloutBuffer is of size (n_steps_per_env * n_envs)
         minibatch_size = 64    # should be a factor of (n_steps_per_env * n_envs)
         total_steps = 30000000
-        #total_steps = 3000
+        #total_steps = 30000
 
         learning_rate = 3e-4
         folder_name = f'Basic_Run_R{self.robot_type}'
@@ -332,7 +380,7 @@ class Train(Train_Base):
 
         # Uses different server and monitor ports
         server = Server( self.server_p-1, self.monitor_p, 1 )
-        env = Basic_Run( self.ip, self.server_p-1, self.monitor_p, self.robot_type, True )
+        env = Basic_Run( self.ip, self.server_p-1, self.monitor_p, self.robot_type, True, 0 )
         model = PPO.load( args["model_file"], env=env )
 
         try:

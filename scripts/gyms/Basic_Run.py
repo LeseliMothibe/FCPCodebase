@@ -57,20 +57,28 @@ class Basic_Run(gym.Env):
         #Leseli
         self.speeds = []
         self.falls = []
-        self.speed_sum = 0
-        self.avg_speed = 0
+        self.speed_sum = 0.0
+        self.avg_speed = 0.0
         self.fall_count = 0
         self.episode_number = 1
+        self.deviation_sum = 0.0
+        self.start_orientation = 0.0
+        self.start_time = 0.0
+        self.start_pos = 0.0
+        self.cumulative_fall = 0
 
         self.speeds_csv = 'average_speeds.csv'
-        self.falls_csv = 'falls.csv'
+        self.falls_csv_running = 'falls_running.csv'
+        self.falls_csv_stopping = 'falls_stopping.csv'
         self.stopping_time_csv = 'stopping_time.csv'
         self.stopping_dist_csv = 'stopping_dist.csv'
         self.stopping_deviation_csv = 'stopping_deviation.csv'
+        self.running_deviation_csv = 'running_deviation.csv'
+        self.cumulative_fall_csv = 'cumulative_fall.csv'
 
         #stopping variables:
         self.stopping_start_pos = 0.0
-        self.current_orientation = 0.0
+        self.current_orientation_devaition = 0.0
 
         
         #speed
@@ -79,9 +87,14 @@ class Basic_Run(gym.Env):
             writer.writerow(['Episode', 'Average Speed'])
 
         #falls
-        with open(self.falls_csv, mode = 'w', newline='') as file:
+        with open(self.falls_csv_running, mode = 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['Episode', 'Fall State'])
+
+        with open(self.falls_csv_stopping, mode = 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Episode', 'Fall State'])
+
 
         #stppping time
         with open(self.stopping_time_csv, mode = 'w', newline='') as file:
@@ -97,6 +110,17 @@ class Basic_Run(gym.Env):
         with open(self.stopping_deviation_csv, mode = 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['Episode', 'Stopping Deviation'])
+
+        with open(self.running_deviation_csv, mode = 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Episode', 'Running Deviation'])
+
+        #Cumulative Falls
+        with open(self.cumulative_fall_csv, mode = 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Episode', 'Number of Falls'])
+
+
 
 
     def log_to_csv(self, doc, episode_number, metric):
@@ -174,6 +198,11 @@ class Basic_Run(gym.Env):
         self.step_counter = 0
         r = self.player.world.robot
         self.speed_sum = 0
+        self.deviation_sum  = 0
+
+        self.start_time = time.perf_counter()
+        self.start_pos = r.cheat_abs_pos[0]
+
         
         for _ in range(25): 
             self.player.scom.unofficial_beam((-14,0,0.50),0) # beam player continuously (floating above ground)
@@ -216,8 +245,6 @@ class Basic_Run(gym.Env):
         if self.env_id == 0:
             startTime0 = time.perf_counter()
 
-            if self.step_counter == 0:
-                self.log_to_csv(self.speeds_csv, "STOP", "STOP")
 
 
        
@@ -229,6 +256,11 @@ class Basic_Run(gym.Env):
             Reason: the agent decides the parameters during the previous footstep
             '''
             self.player.behavior.execute("Step", self.step_default_dur, self.step_default_z_span, self.step_default_z_max)
+
+            if self.env_id == 0:
+                self.start_orientation = self.obs[3]
+
+
         else:
             
             step_zsp =     np.clip(self.step_default_z_span + self.act[20]/300,   0,     0.07)
@@ -256,15 +288,16 @@ class Basic_Run(gym.Env):
 
         self.sync() # run simulation step
 
-
-
         if self.env_id == 0:
             stopTime0 = time.perf_counter()
+
 
         self.step_counter += 1
 
         #exisisting reward
-        reward = 2* (r.cheat_abs_pos[0] - self.lastx)
+        reward = (r.cheat_abs_pos[0] - self.lastx)
+
+        #reward = 2* (r.cheat_abs_pos[0] - self.lastx)
 
         #########################LESELI'S REWARDS##################
 
@@ -273,39 +306,57 @@ class Basic_Run(gym.Env):
         ##############################################################################
 
         if self.step_counter < 300:
-           
 
-            torso_velocity = 0.05*((r.cheat_abs_pos[0] - self.lastx) / r.STEPTIME )#speed reward
+            if self.env_id == 0:
+
+                #if self.step_counter % 10 == 0:
+
+                speed = abs(r.cheat_abs_pos[0] - self.start_pos)
+                self.speed_sum += speed
+
+
+            #torso_velocity = 0.05*speed
             #joint_speed_penalty = 0.001 * np.sum(np.abs(r.joints_speed[2:22]))  # Joint speed penalty
             #torso_penalty = 0.005 * (abs(r.imu_torso_roll) + abs(r.imu_torso_pitch))  # Stability penalty
-            self.deviation_from_heading = 0.005 * abs(self.current_orientation)  # Deviation from straight (heading = 0) 
+            self.current_orientation_devaition = abs(self.start_orientation - self.obs[3])
+            self.deviation_from_heading = 0.005 * abs(self.current_orientation_devaition)  # Deviation from straight (heading = 0) 
+            falling_penalty = 0
+
+            if r.cheat_abs_pos[2] <0.3:
+                falling_penalty = 0.08
 
 
             lf_fz = r.frp.get('lf', (0,0,0,0,0,0))[5]
             rf_fz = r.frp.get('rf', (0,0,0,0,0,0))[5]
             foot_contact_bonus = 0.1 * (lf_fz + rf_fz) / 200
             
-            reward += torso_velocity -self.deviation_from_heading
+            #reward += torso_velocity -self.deviation_from_heading - falling_penalty
 
             if self.env_id == 0:
-                self.speed_sum += torso_velocity
+                
+                self.deviation_sum += self.current_orientation_devaition
 
                 if r.cheat_abs_pos[2] < 0.3:
                     self.fall_count = self.fall_count + 1
+                    self.cumulative_fall += 1
 
                 # Update speed list and plot
                 if self.step_counter == 299 or r.cheat_abs_pos[2] < 0.3:
                     self.avg_speed = self.speed_sum / self.step_counter
+                    avg_deviation = self.deviation_sum/self.step_counter
                     self.speeds.append(self.avg_speed)
                     self.log_to_csv(self.speeds_csv, self.episode_number, self.avg_speed)
-                    self.log_to_csv(self.falls_csv, self.episode_number, self.fall_count)
+                    self.log_to_csv(self.falls_csv_running, self.episode_number, self.fall_count)
+                    self.log_to_csv(self.running_deviation_csv, self.episode_number, avg_deviation)
+                    self.log_to_csv(self.cumulative_fall_csv, self.episode_number, self.cumulative_fall)
+
     
 
         ##############################################################################
         ############################## S T O P P I N G ###############################
         ##############################################################################
 
-
+        '''
         if self.step_counter == 300:
             if self.env_id == 0:
                 self.stopping_start_pos = r.cheat_abs_pos[0]
@@ -345,6 +396,8 @@ class Basic_Run(gym.Env):
                 self.log_to_csv(self.stopping_time_csv, self.episode_number, stopping_time)
                 self.log_to_csv(self.stopping_dist_csv, self.episode_number, stopping_dist)
                 self.log_to_csv(self.stopping_deviation_csv, self.episode_number, self.deviation_from_heading)
+                self.log_to_csv(self.falls_csv_stopping, self.episode_number, self.fall_count)
+        '''
 
         ###########################################################
 
@@ -352,7 +405,7 @@ class Basic_Run(gym.Env):
 
         # terminal state: the robot is falling or timeout
         #end of the episode
-        terminal = r.cheat_abs_pos[2] < 0.3 or self.step_counter > 600
+        terminal = r.cheat_abs_pos[2] < 0.3 or self.step_counter > 300
 
 
         return self.observe(), reward, terminal, {}
@@ -370,8 +423,8 @@ class Train(Train_Base):
         n_envs = min(16, os.cpu_count())
         n_steps_per_env = 1024  # RolloutBuffer is of size (n_steps_per_env * n_envs)
         minibatch_size = 64     # should be a factor of (n_steps_per_env * n_envs)
-        total_steps = 30000000
-        #total_steps = 2000000 #one hour run = 2000000
+        #total_steps = 30000000
+        total_steps = 2000 #one hour run = 2000000
         #total_steps = 20000000
         learning_rate = 3e-4
         folder_name = f'Basic_Run_R{self.robot_type}'
