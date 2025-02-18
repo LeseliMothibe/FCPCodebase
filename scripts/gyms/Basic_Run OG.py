@@ -59,7 +59,6 @@ class Basic_Run(gym.Env):
         self.stopping_dist_csv = 'stopping_dist.csv'
         self.stopping_deviation_csv = 'stopping_deviation.csv'
         self.running_deviation_csv = 'og_running_deviation.csv'
-        self.cumulative_fall_csv = 'cumulative_fall.csv'
 
         self.speeds = []
         self.falls = []
@@ -77,12 +76,12 @@ class Basic_Run(gym.Env):
         #speed
         with open(self.speeds_csv, mode = 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Episode', 'Average Speed'])
+            writer.writerow(['Episode', 'speed'])
 
         #falls
         with open(self.falls_csv_running, mode = 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Episode', 'Fall State'])
+            writer.writerow(['Episode', 'falls'])
         
 
     def observe(self, init=False):
@@ -267,7 +266,6 @@ class Basic_Run(gym.Env):
                     self.log_to_csv(self.speeds_csv, self.episode_number, self.avg_speed)
                     self.log_to_csv(self.falls_csv_running, self.episode_number, self.fall_count)
                     self.log_to_csv(self.running_deviation_csv, self.episode_number, avg_deviation)
-                    self.log_to_csv(self.cumulative_fall_csv, self.episode_number, self.cumulative_fall)
             
 
         # terminal state: the robot is falling or timeout

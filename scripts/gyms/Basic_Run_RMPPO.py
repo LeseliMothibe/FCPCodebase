@@ -61,7 +61,7 @@ class Basic_Run(gym.Env):
         self.running_deviation_csv = 'rmppo_running_deviation.csv'
         self.cumulative_fall_csv = 'cumulative_fall.csv'
 
-        self.speeds = []
+        self.speeds = [0, 0]
         self.falls = []
         self.speed_sum = 0.0
         self.avg_speed = 0.0
@@ -73,16 +73,17 @@ class Basic_Run(gym.Env):
         self.start_pos = 0.0
         self.cumulative_fall = 0
         self.current_orientation_devaition = 0.0
+        self.speed = 0.0
 
         #speed
         with open(self.speeds_csv, mode = 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Episode', 'Average Speed'])
+            writer.writerow(['Episode', 'speed'])
 
         #falls
         with open(self.falls_csv_running, mode = 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Episode', 'Fall State'])
+            writer.writerow(['Episode', 'falls'])
         
 
     def observe(self, init=False):
@@ -240,17 +241,19 @@ class Basic_Run(gym.Env):
         self.sync() # run simulation step
         self.step_counter += 1
          
-        base_reward =  3 * (r.cheat_abs_pos[0] - self.lastx)
+        base_reward =  3 * (r.cheat_abs_pos[0] - self.start_pos)
+        #reward = r.cheat_abs_pos[0] - self.lastx
+
 
         ##############################################################################
         ################################  MY REWARDS  ################################
         ##############################################################################
-        speed = abs(r.cheat_abs_pos[0] - self.lastx)
+
+        self.speed = abs(r.cheat_abs_pos[0] - self.start_pos)
+
         if self.env_id == 0:
 
-            #if self.step_counter % 10 == 0:
-
-            self.speed_sum += speed
+            self.speed_sum += self.speed
 
             self.current_orientation_devaition = abs(self.start_orientation - self.obs[3])
             self.deviation_sum += self.current_orientation_devaition
@@ -261,7 +264,6 @@ class Basic_Run(gym.Env):
 
         # Stability bonuses
         torso_stability = 1.0 / (1.0 + abs(r.imu_torso_pitch) + abs(r.imu_torso_roll))
-        foot_contact = np.sum(r.frp.get('lf', (0,0,0,0,0,0))[3:6]) + np.sum(r.frp.get('rf', (0,0,0,0,0,0))[3:6])
         smooth_movement = 1.0 / (1.0 + np.sum(np.abs(r.joints_speed[2:22])))
         
         # Composite reward calculation
@@ -275,12 +277,12 @@ class Basic_Run(gym.Env):
         )
 
         # Speed achievement bonuses
-        if speed > 0.3:  # Bronze speed tier
-            reward += 0.05
-        if speed > 0.5:  # Silver speed tier
+        if self.speed > 1:  # Bronze speed tier
+            reward += 0.5
+        if self.speed > 3:  # Silver speed tier
             reward += 0.1
-        if speed > 0.7:  # Gold speed tier
-            reward += 0.2
+        if self.speed > 5.5:  # Gold speed tier
+            reward += 1
 
         # ---------------------------------------------------------------
         # Add to reward calculation:
@@ -293,7 +295,11 @@ class Basic_Run(gym.Env):
             reward += 0.5  # Milestone bonus
 
         if r.cheat_abs_pos[2] <0.3:
-            reward -= 0.08
+            reward -= 1
+
+        #acceleration reward
+        if self.speeds[-1] > self.speeds[-2]:
+            reward += 1.5 * (self.speeds[-1] - self.speeds[-2])
 
         ##############################################################################
         ##############################################################################
@@ -307,7 +313,6 @@ class Basic_Run(gym.Env):
         
         if self.env_id == 0:
                 
-                # Update speed list and plot
                 if self.step_counter == 299 or r.cheat_abs_pos[2] < 0.3:
                     self.avg_speed = self.speed_sum / self.step_counter
                     avg_deviation = self.deviation_sum/self.step_counter
@@ -315,7 +320,6 @@ class Basic_Run(gym.Env):
                     self.log_to_csv(self.speeds_csv, self.episode_number, self.avg_speed)
                     self.log_to_csv(self.falls_csv_running, self.episode_number, self.fall_count)
                     self.log_to_csv(self.running_deviation_csv, self.episode_number, avg_deviation)
-                    self.log_to_csv(self.cumulative_fall_csv, self.episode_number, self.cumulative_fall)
 
         ##############################################################################
         ##############################################################################

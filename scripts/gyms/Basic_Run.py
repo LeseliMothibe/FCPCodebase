@@ -93,23 +93,23 @@ class Basic_Run(gym.Env):
 
         with open(self.falls_csv_stopping, mode = 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Episode', 'Fall State'])
+            writer.writerow(['Episode', 'falls'])
 
 
         #stppping time
         with open(self.stopping_time_csv, mode = 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Episode', 'Stopping Time'])
+            writer.writerow(['Episode', 'stopping_time'])
 
         #stopping distance
         with open(self.stopping_dist_csv, mode = 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Episode', 'Stopping Distance'])
+            writer.writerow(['Episode', 'stopping_distance'])
 
         #stopping deviation
         with open(self.stopping_deviation_csv, mode = 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Episode', 'Stopping Deviation'])
+            writer.writerow(['Episode', 'average deviation'])
 
         with open(self.running_deviation_csv, mode = 'w', newline='') as file:
             writer = csv.writer(file)
@@ -119,8 +119,6 @@ class Basic_Run(gym.Env):
         with open(self.cumulative_fall_csv, mode = 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['Episode', 'Number of Falls'])
-
-
 
 
     def log_to_csv(self, doc, episode_number, metric):
@@ -295,9 +293,11 @@ class Basic_Run(gym.Env):
         self.step_counter += 1
 
         #exisisting reward
-        reward = (r.cheat_abs_pos[0] - self.lastx)
+        #reward = (r.cheat_abs_pos[0] - self.lastx)
 
         #reward = 2* (r.cheat_abs_pos[0] - self.lastx)
+
+        reward = 0
 
         #########################LESELI'S REWARDS##################
 

@@ -16,8 +16,6 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 import csv
-import cloudpickle
-import dill
 
 class Basic_Stop(Basic_Run):
     def __init__(self, ip, server_p, monitor_p, r_type, enable_draw, env_id, running_model_path):
@@ -43,6 +41,8 @@ class Basic_Stop(Basic_Run):
 
         self.stopping_start_pos = self.player.world.robot.cheat_abs_pos[0]
         self.stopping_start_pos_y = self.player.world.robot.cheat_abs_pos[1]
+
+        self.stop_flag = 0
 
         ''''
 
@@ -123,8 +123,12 @@ class Basic_Stop(Basic_Run):
         # 4. Smooth Deceleration Reward (Maximize)
         current_speed = abs(r.cheat_abs_pos[0] - self.lastx)
         speed_reduction = self.initial_speed - current_speed
-        decel_reward = 0.6 * np.clip(speed_reduction, 0, None)  # Reward for slowing down
-        
+        #decel_reward = 0.6 * np.clip(speed_reduction, 0, None)  # Reward for slowing down
+        if current_speed > 0:
+            decel_reward = 1.5 * (1.0/current_speed)
+        else:
+            decel_reward = 0
+
         # 5. Joint Smoothness Reward (Maximize)
         joint_accel = np.abs(r.joints_speed[2:22] - self.last_joint_speeds)
         smoothness_reward = 0.4 * (1.0 - np.tanh(0.5 * np.sum(joint_accel)))
@@ -156,6 +160,8 @@ class Basic_Stop(Basic_Run):
             deviation_penalty
         )
         
+        if current_speed < 0.5:
+            reward += 5
 
         """"
         
@@ -194,22 +200,28 @@ class Basic_Stop(Basic_Run):
         #if the robot has stopped, log this info
 
         """
-        if current_speed < 0.2 and self.stop_flag != 1 and self.env_id == 0:
+        if current_speed < 0.4 and self.stop_flag != 1 and self.env_id == 0:
                 
                 self.stop_flag = 1
                 distance = abs(self.stopping_start_pos - r.cheat_abs_pos[0])
                 self.log_to_csv(self.stopping_time_csv, self.episode_number, self.step_counter)
                 self.log_to_csv(self.stopping_dist_csv, self.episode_number, distance)                
 
-        if self.step_counter == 299 or r.cheat_abs_pos[2] < 0.3:
+        if self.step_counter == 199 or r.cheat_abs_pos[2] < 0.3:
             if self.env_id == 0:
                 
+
                 self.log_to_csv(self.falls_csv_stopping, self.episode_number, self.fall_count)
                 self.log_to_csv(self.stopping_deviation_csv, self.episode_number, self.deviation_from_heading)
+
+                if self.stop_flag == 0:
+                    self.log_to_csv(self.stopping_time_csv, self.episode_number, 20000)
+                    self.log_to_csv(self.stopping_dist_csv, self.episode_number, 20000)
 
 
 
         self.prev_speed = current_speed
+        self.lastx = r.cheat_abs_pos[0]
         
         
         # Terminal conditions: Fallen or timeout (adjust max stopping steps as needed)
@@ -225,7 +237,7 @@ class Train(BaseTrain):
         n_envs = min(16, os.cpu_count())
         n_steps_per_env = 1024  # RolloutBuffer is of size (n_steps_per_env * n_envs)
         minibatch_size = 64  
-        total_steps = 30000000  # Adjust training steps
+        total_steps = 10000000  # Adjust training steps
         #total_steps = 7000  # Adjust training steps
         #running_model_path = "./scripts/gyms/logs/Basic_Run_R1_246/best_model"  # Path to fast trained running model
         running_model_path = "./scripts/gyms/logs/Basic_Run_R1_252/best_model"  # Path to slow trained running model == 30 minutes training
