@@ -158,3 +158,49 @@ radial_histogram(df_rmppo, "Final Direction - RMPPO")
 radial_histogram(df_vanilla, "Final Direction - Vanilla PPO")
 
 print("All plots have been generated and saved in the 'results_plots' directory.")
+
+# ==========================
+# 9 Fall ogive Plot
+# ==========================
+
+# Load CSV files
+df_rmppo = pd.read_csv("rmppo_metrics.csv")
+df_vanilla = pd.read_csv("vanilla_metrics.csv")
+df_stopping = pd.read_csv("stopping_metrics.csv")
+
+def plot_fall_trend(df, label, window=90):
+    """Plots the rolling mean trend of falls over episodes."""
+    df["rolling_falls"] = df["falls"].rolling(window=window, min_periods=1).mean()
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(df.index, df["rolling_falls"], label=f"{label} (Rolling {window})", alpha=0.8)
+    plt.xlabel("Episode")
+    plt.ylabel("Fall Frequency (Rolling Mean)")
+    plt.title(f"Fall Frequency Trend - {label}")
+    plt.legend()
+    plt.grid(True)
+    save_plot(plt, f"fall_trend_{label.replace(' ', '_')}")
+
+def plot_fall_time_series(df, label):
+    """Plots binary time series for falls (1 = fall, 0 = no fall)."""
+    plt.figure(figsize=(12, 4))
+    plt.scatter(df.index, df["falls"], alpha=0.5, marker='o', s=10, label=label)
+    plt.xlabel("Episode")
+    plt.ylabel("Fall (1 = Yes, 0 = No)")
+    plt.title(f"Binary Time Series of Falls - {label}")
+    plt.yticks([0, 1], ["No Fall", "Fall"])
+    plt.legend()
+    plt.grid(axis='x', linestyle='--', alpha=0.6)
+    save_plot(plt, f"fall_series_{label.replace(' ', '_')}")
+
+
+# Generate plots for all datasets
+plot_fall_trend(df_rmppo, "RMPPO")
+plot_fall_trend(df_vanilla, "Vanilla PPO")
+plot_fall_trend(df_stopping, "Stopping")
+
+plot_fall_time_series(df_rmppo, "RMPPO")
+plot_fall_time_series(df_vanilla, "Vanilla PPO")
+plot_fall_time_series(df_stopping, "Stopping")
+
+
