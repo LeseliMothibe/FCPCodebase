@@ -241,7 +241,7 @@ class Basic_Run(gym.Env):
         self.sync() # run simulation step
         self.step_counter += 1
          
-        base_reward =  1.5 * (r.cheat_abs_pos[0] - self.lastx)
+        base_reward =  3 * (r.cheat_abs_pos[0] - self.lastx)
         #reward = r.cheat_abs_pos[0] - self.lastx
 
 
@@ -268,20 +268,20 @@ class Basic_Run(gym.Env):
         # Composite reward calculation
         reward = (
             base_reward   # Primary forward motion incentive
-            + 0.002 * torso_stability   # Bonus for upright posture
+            + 0.0009 * torso_stability   # Bonus for upright posture
             #+ 0.1 * foot_contact   # Bonus for maintaining foot contact makes it spin
-            + 0.05 * smooth_movement   # Bonus for smooth joint movements
-            + 0.01   # Small survival bonus per step 
-            - 0.05 * self.current_orientation_devaition
+            + 0.005 * smooth_movement   # Bonus for smooth joint movements
+            + 0.001   # Small survival bonus per step 
+            - 0.08 * self.current_orientation_devaition
         )
 
         # Speed achievement bonuses
-        if self.speeds[-1] > 1:  # Bronze speed tier
-            reward += 0.5
-        if self.speeds[-1] > 3:  # Silver speed tier
-            reward += 0.1
-        if self.speeds[-1] > 5.5:  # Gold speed tier
-            reward += 1
+        if self.speed > 0.3:  # Bronze speed tier
+            reward += 0.005
+        if self.speed > 0.5:  # Silver speed tier
+            reward += 0.01
+        if self.speed > 0.7:  # Gold speed tier
+            reward += 0.02
 
         # ---------------------------------------------------------------
         # Add to reward calculation:
@@ -289,16 +289,12 @@ class Basic_Run(gym.Env):
         height_bonus = 1.0 / (1.0 + abs(r.loc_head_z - target_height))
         #reward += 0.1 * height_bonus
 
-        # Add to reward calculation:
-        if self.step_counter % 50 == 0:  # Every 50 steps
-            reward += 0.5  # Milestone bonus
-
         if r.cheat_abs_pos[2] <0.3:
-            reward -= 5
+            reward -= 0.09
 
         #acceleration reward
         if self.speeds[-1] > self.speeds[-2]:
-            reward += 1.5 * (self.speeds[-1] - self.speeds[-2])
+            reward += 0.05 * (self.speeds[-1] - self.speeds[-2])
 
         ##############################################################################
         ##############################################################################
@@ -341,8 +337,8 @@ class Train(Train_Base):
         n_envs = min(16, os.cpu_count())
         n_steps_per_env = 1024  # RolloutBuffer is of size (n_steps_per_env * n_envs)
         minibatch_size = 64    # should be a factor of (n_steps_per_env * n_envs)
-        #total_steps = 30000000
-        total_steps = 30000
+        total_steps = 30000000
+        #total_steps = 30000
 
         learning_rate = 3e-4
         folder_name = f'Basic_Run_R{self.robot_type}'
